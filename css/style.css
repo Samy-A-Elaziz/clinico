@@ -468,6 +468,20 @@ body {
 }
 .margin-top-15 { margin-top: 15px; }
 
+/* Age field: a number input paired with a Day/Month/Year unit selector */
+.compound-input-group {
+    display: flex;
+    gap: 8px;
+}
+.compound-input-group input {
+    flex: 1.4;
+    min-width: 0;
+}
+.compound-input-group select {
+    flex: 1;
+    min-width: 0;
+}
+
 /* Repeatable "add another link" rows (X-ray URLs, lab report URLs, etc.) */
 .dynamic-url-container {
     background-color: #f8fafc;
