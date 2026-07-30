@@ -89,6 +89,58 @@ function escapeHtml(value) {
 }
 
 /**
+ * The age field is captured as a number + a unit (Day/Month/Year) so it can
+ * always be displayed consistently — e.g. "3 Y", "6 M", "10 D" — in the
+ * history list, the patient details page, the exported PDF report, and the
+ * exported XLSX spreadsheet.
+ *
+ * We still store it as a single "<number> <unit>" string (e.g. "3 Y") so
+ * the record shape matches the single "age" column already used by the
+ * Google Sheets backend — no backend/spreadsheet changes are required.
+ */
+const AGE_UNIT_LABELS = { D: 'Day(s)', M: 'Month(s)', Y: 'Year(s)' };
+
+/**
+ * Combines a number and a unit letter into the stored/displayed age string.
+ * @param {string|number} value - The numeric age entered by the vet.
+ * @param {string} unit - One of 'D', 'M', 'Y'.
+ * @returns {string} e.g. "3 Y", or an empty string if no value was given.
+ */
+function formatAge(value, unit) {
+    const trimmedValue = String(value === undefined || value === null ? '' : value).trim();
+    if (trimmedValue === '') return '';
+    return `${trimmedValue} ${unit || 'Y'}`;
+}
+
+/**
+ * Reverses `formatAge()` so an existing record's age can be split back into
+ * a number + unit to pre-fill the two form controls when editing.
+ * Also makes a best effort to understand older, free-text age values that
+ * were typed before this Day/Month/Year selector existed (e.g. "3 Years").
+ * @param {string} ageText - The record's stored `age` value.
+ * @returns {{value: string, unit: string}}
+ */
+function parseAgeString(ageText) {
+    const text = (ageText === undefined || ageText === null) ? '' : String(ageText).trim();
+    if (text === '') return { value: '', unit: 'Y' };
+
+    // Values saved by this app are always "<number> <D|M|Y>".
+    const structuredMatch = text.match(/^(\d+(?:\.\d+)?)\s*(D|M|Y)$/i);
+    if (structuredMatch) {
+        return { value: structuredMatch[1], unit: structuredMatch[2].toUpperCase() };
+    }
+
+    // Fall back to interpreting older free-text entries, e.g. "3 Years" or "6 Months".
+    const numberMatch = text.match(/^(\d+(?:\.\d+)?)/);
+    const value = numberMatch ? numberMatch[1] : '';
+    let unit = 'Y';
+    if (/day/i.test(text)) unit = 'D';
+    else if (/month/i.test(text)) unit = 'M';
+    else if (/year|yr/i.test(text)) unit = 'Y';
+    return { value, unit };
+}
+
+/**
  * Dynamically loads an external script only if it hasn't been loaded yet,
  * then runs a callback. Used to fetch the SheetJS (XLSX) and jsPDF
  * libraries on demand, so the app doesn't pay their download cost until
@@ -275,7 +327,11 @@ class ClinicoApp {
         document.getElementById('field-id').value = record.id;
         document.getElementById('field-petName').value = record.petName || '';
         document.getElementById('field-ownerName').value = record.ownerName || '';
-        document.getElementById('field-age').value = record.age || '';
+
+        const parsedAge = parseAgeString(record.age);
+        document.getElementById('field-age-value').value = parsedAge.value;
+        document.getElementById('field-age-unit').value = parsedAge.unit;
+
         document.getElementById('field-weight').value = record.weight || '';
         document.getElementById('field-species').value = record.species || '';
         document.getElementById('field-breed').value = record.breed || '';
@@ -339,7 +395,10 @@ class ClinicoApp {
             id: existingId || ('CLN-' + Math.floor(100000 + Math.random() * 900000)),
             petName: document.getElementById('field-petName').value,
             ownerName: document.getElementById('field-ownerName').value,
-            age: document.getElementById('field-age').value,
+            age: formatAge(
+                document.getElementById('field-age-value').value,
+                document.getElementById('field-age-unit').value
+            ),
             weight: document.getElementById('field-weight').value,
             species: document.getElementById('field-species').value,
             breed: document.getElementById('field-breed').value,
@@ -405,16 +464,26 @@ class ClinicoApp {
         }
 
         const buildAndDownloadWorkbook = () => {
-            const headersOrder = [
-                'id', 'petName', 'ownerName', 'age', 'weight', 'species', 'breed', 'sex', 'neutered',
-                'imageUrl', 'about', 'complain', 'symptoms', 'syndrome', 'diagnosis', 'treatment',
-                'xray', 'ct', 'mri', 'fluoroscopy', 'ultrasound', 'echography',
-                'cbc', 'biochemistry', 'urinalysis', 'cytology', 'otherLab',
-                'pdf', 'word', 'excel', 'externalFiles'
-            ];
+            // The left-hand key is the internal field name (also used as the
+            // Google Sheets column name); the right-hand label is what the
+            // vet actually sees as the column header when they open the file.
+            const columnLabels = {
+                id: 'Patient ID', petName: 'Animal Name', ownerName: 'Owner Name',
+                age: 'Age', weight: 'Mass(Kg)', species: 'Species', breed: 'Breed',
+                sex: 'Sex', neutered: 'Neutered', imageUrl: 'Image URL', about: 'About',
+                complain: 'Complaint', symptoms: 'Symptoms', syndrome: 'Syndrome',
+                diagnosis: 'Diagnosis', treatment: 'Treatment',
+                xray: 'X-Ray', ct: 'CT', mri: 'MRI', fluoroscopy: 'Fluoroscopy',
+                ultrasound: 'Ultrasound', echography: 'Echography',
+                cbc: 'CBC', biochemistry: 'Biochemistry', urinalysis: 'Urinalysis',
+                cytology: 'Cytology', otherLab: 'Other Lab',
+                pdf: 'PDF Files', word: 'Word Files', excel: 'Excel Files', externalFiles: 'External Files'
+            };
+            const headersOrder = Object.keys(columnLabels);
 
             // Flatten each record's link arrays into a single "; "-separated
-            // cell so the spreadsheet stays simple and readable.
+            // cell so the spreadsheet stays simple and readable, and swap in
+            // the friendly column label for each internal field name.
             const sheetRows = this.runtime_db.map((record) => {
                 const rowData = {};
                 headersOrder.forEach((header) => {
@@ -424,12 +493,12 @@ class ClinicoApp {
                     } else if (Array.isArray(value)) {
                         value = value.join('; ');
                     }
-                    rowData[header] = value;
+                    rowData[columnLabels[header]] = value;
                 });
                 return rowData;
             });
 
-            const worksheet = XLSX.utils.json_to_sheet(sheetRows, { header: headersOrder });
+            const worksheet = XLSX.utils.json_to_sheet(sheetRows, { header: headersOrder.map((h) => columnLabels[h]) });
             const workbook = XLSX.utils.book_new();
             XLSX.utils.book_append_sheet(workbook, worksheet, "Clinical Registry Data");
 
@@ -485,12 +554,12 @@ class ClinicoApp {
 
             // 1. Patient details
             printSectionHeader("1. Patient Details");
-            doc.text(`Pet Name: ${rec.petName || 'N/A'}`, 15, yCursor);
+            doc.text(`Animal Name: ${rec.petName || 'N/A'}`, 15, yCursor);
             doc.text(`Species: ${rec.species || 'N/A'}`, 75, yCursor);
             doc.text(`Breed: ${rec.breed || 'Unclassified'}`, 140, yCursor);
             yCursor += 6;
             doc.text(`Age: ${rec.age || 'N/A'}`, 15, yCursor);
-            doc.text(`Mass: ${rec.weight || 'N/A'}`, 75, yCursor);
+            doc.text(`Mass(Kg): ${rec.weight || 'N/A'}`, 75, yCursor);
             doc.text(`Sex: ${rec.sex || 'N/A'}`, 140, yCursor);
             yCursor += 6;
             doc.text(`Neutered: ${rec.neutered || 'N/A'}`, 15, yCursor);
@@ -637,7 +706,7 @@ class ClinicoApp {
                     <p class="card-preview-text"><strong>Summary:</strong> ${escapeHtml(rec.about)}</p>
                     <div class="card-meta-bottom">
                         <span><i class="fa-solid fa-weight-hanging"></i> Mass(Kg): <strong>${escapeHtml(rec.weight)}</strong></span>
-                        <span><i class="fa-solid fa-cake-candles"></i> Age(year): <strong>${escapeHtml(rec.age)}</strong></span>
+                        <span><i class="fa-solid fa-cake-candles"></i> Age: <strong>${escapeHtml(rec.age)}</strong></span>
                         <span><i class="fa-solid fa-user"></i> Owner: <strong>${escapeHtml(rec.ownerName || 'N/A')}</strong></span>
                     </div>
                 </div>
@@ -709,7 +778,7 @@ class ClinicoApp {
                         <div class="vital-row"><span class="vital-label">Species:</span><span class="vital-value">${escapeHtml(rec.species)}</span></div>
                         <div class="vital-row"><span class="vital-label">Breed:</span><span class="vital-value">${escapeHtml(rec.breed || 'Unclassified')}</span></div>
                         <div class="vital-row"><span class="vital-label">Age:</span><span class="vital-value">${escapeHtml(rec.age)}</span></div>
-                        <div class="vital-row"><span class="vital-label">Mass:</span><span class="vital-value">${escapeHtml(rec.weight)}</span></div>
+                        <div class="vital-row"><span class="vital-label">Mass(Kg):</span><span class="vital-value">${escapeHtml(rec.weight)}</span></div>
                         <div class="vital-row"><span class="vital-label">Sex:</span><span class="vital-value">${escapeHtml(rec.sex)}</span></div>
                         <div class="vital-row"><span class="vital-label">Neutered:</span><span class="vital-value">${escapeHtml(rec.neutered)}</span></div>
                         <div class="vital-row"><span class="vital-label">Owner:</span><span class="vital-value">${escapeHtml(rec.ownerName || 'N/A')}</span></div>
