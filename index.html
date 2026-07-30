@@ -17,7 +17,7 @@
             <div class="brand" onclick="app.switchView('home')">
                 <i class="fa-solid fa-house-medical brand-icon"></i>
                 <span class="brand-name">Clinico</span>
-                <span class="brand-badge">VIMS v1.2</span>
+                <span class="brand-badge">VIMS v1.1</span>
             </div>
 
             <!-- On phones, these links collapse behind the hamburger button below
@@ -55,7 +55,7 @@
                 <div class="folder-tree">
                     <strong>Standardized Directory Scheme:</strong>
                     <ul>
-                        <li><i class="fa-regular fa-folder-open"></i> PetName/
+                        <li><i class="fa-regular fa-folder-open"></i> AnimalName/
                             <ul>
                                 <li><i class="fa-regular fa-folder"></i> Radiography/ <small>(Xray, CT, MRI)</small></li>
                                 <li><i class="fa-regular fa-folder"></i> Sonar/ <small>(Ultrasound)</small></li>
@@ -75,7 +75,7 @@
             <section id="view-home" class="view-section active">
                 <div class="welcome-banner">
                     <h1>Clinical Informatics Portal</h1>
-                    <p>Welcome back. Select an operational track to process critical diagnostics and pet records.</p>
+                    <p>Welcome back. Select an operational track to process critical diagnostics and animal records.</p>
                 </div>
                 <div class="dashboard-hub">
                     <div class="hub-card primary-hub" onclick="app.switchView('add')">
@@ -106,7 +106,7 @@
                         <h3 class="section-divider"><i class="fa-solid fa-address-card"></i> Demographics & Presentation Details</h3>
                         <div class="form-grid">
                             <div class="form-group">
-                                <label for="field-petName">Pet Name *</label>
+                                <label for="field-petName">Animal Name *</label>
                                 <input type="text" id="field-petName" required placeholder="e.g., Bella">
                             </div>
                             <div class="form-group">
@@ -114,12 +114,20 @@
                                 <input type="text" id="field-ownerName" placeholder="e.g., John Doe">
                             </div>
                             <div class="form-group">
-                                <label for="field-age">Age(year) *</label>
-                                <input type="text" id="field-age" required placeholder="e.g., 3 Years or 6 Months">
+                                <label for="field-age-value">Age *</label>
+                                <div class="compound-input-group">
+                                    <input type="number" id="field-age-value" min="0" step="1" required placeholder="e.g., 3">
+                                    <select id="field-age-unit" required>
+                                        <option value="" disabled selected>Unit</option>
+                                        <option value="D">Day(s)</option>
+                                        <option value="M">Month(s)</option>
+                                        <option value="Y">Year(s)</option>
+                                    </select>
+                                </div>
                             </div>
                             <div class="form-group">
-                                <label for="field-weight">Mass(kg) *</label>
-                                <input type="text" id="field-weight" required placeholder="e.g., 12.5 kg">
+                                <label for="field-weight">Mass(Kg) *</label>
+                                <input type="text" id="field-weight" required placeholder="e.g., 12.5">
                             </div>
                             <div class="form-group">
                                 <label for="field-species">Species *</label>
@@ -244,7 +252,7 @@
                 <div class="archive-filter-bar">
                     <div class="search-box-wrapper">
                         <i class="fa-solid fa-magnifying-glass search-icon"></i>
-                        <input type="text" id="search-input" placeholder="Search by Pet Name, ID, or Owner...">
+                        <input type="text" id="search-input" placeholder="Search by Animal Name, ID, or Owner...">
                     </div>
                     <div class="filter-dropdown-wrapper">
                         <i class="fa-solid fa-filter filter-icon"></i>
